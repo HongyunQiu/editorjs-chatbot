@@ -115,8 +115,81 @@
   gap: 6px;
 }
 
+.cdx-chatbot__header-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cdx-chatbot__header-label {
+  font-size: 12px;
+  color: var(--chatbot-muted);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.cdx-chatbot__header-control {
+  background: var(--chatbot-bg);
+  color: var(--chatbot-assistant-text);
+  border: 1px solid var(--chatbot-border);
+  border-radius: 8px;
+  padding: 2px 8px;
+  font-size: 12px;
+  outline: none;
+  height: 24px;
+  line-height: 20px;
+  box-sizing: border-box;
+}
+
+.cdx-chatbot__header-controls select.cdx-chatbot__header-control {
+  max-width: 160px;
+  /* 统一 select 与 input 的视觉高度（不同平台默认样式差异较大） */
+  padding-top: 0;
+  padding-bottom: 0;
+  line-height: 24px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  padding-right: 26px; /* 给右侧箭头留空间 */
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 10px 10px;
+  /* 简单的 CSS 箭头（避免依赖图片资源） */
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--chatbot-muted) 50%),
+    linear-gradient(135deg, var(--chatbot-muted) 50%, transparent 50%);
+  background-position:
+    right 12px center,
+    right 7px center;
+  background-size:
+    6px 6px,
+    6px 6px;
+}
+
+.cdx-chatbot__header-controls input.cdx-chatbot__header-control {
+  width: 54px;
+}
+
+/* 去掉 number 输入框的上下调节箭头（更紧凑） */
+.cdx-chatbot__header-controls input[type="number"].cdx-chatbot__header-control {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.cdx-chatbot__header-controls input[type="number"].cdx-chatbot__header-control::-webkit-outer-spin-button,
+.cdx-chatbot__header-controls input[type="number"].cdx-chatbot__header-control::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.cdx-chatbot__header-control:focus {
+  border-color: var(--chatbot-primary);
+  box-shadow: 0 0 0 2px var(--chatbot-focus-shadow);
+}
+
 .cdx-chatbot__header-toggle,
-.cdx-chatbot__header-fullscreen {
+.cdx-chatbot__header-fullscreen,
+.cdx-chatbot__header-settings {
   background: none;
   border: 1px solid var(--chatbot-border);
   border-radius: 6px;
@@ -128,9 +201,19 @@
 }
 
 .cdx-chatbot__header-toggle:hover,
-.cdx-chatbot__header-fullscreen:hover {
+.cdx-chatbot__header-fullscreen:hover,
+.cdx-chatbot__header-settings:hover {
   background: var(--chatbot-border);
   color: var(--chatbot-assistant-text);
+}
+
+@media (max-width: 600px) {
+  .cdx-chatbot__header-controls select.cdx-chatbot__header-control {
+    max-width: 110px;
+  }
+  .cdx-chatbot__header-controls input.cdx-chatbot__header-control {
+    width: 46px;
+  }
 }
 
 /* ---- 折叠状态 ---- */

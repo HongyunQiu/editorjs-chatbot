@@ -87,6 +87,7 @@ const editor = new EditorJS({
 | 参数 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
 | `aiChat` | `AiChatFn` | 是 | AI 聊天回调函数，接收消息列表和流式 chunk 回调，返回 `{ abort, done }` 控制对象 |
+| `listConnections` | `() => Promise<AiConnectionInfo[] \| {connections?: AiConnectionInfo[]}>` | 否 | 列出可用的 AI 模型连接，用于在插件内选择模型（在 QNotes 中可对接 `/api/ai/connections`） |
 | `placeholder` | `string` | 否 | 输入框占位文字，默认 `"输入消息，按 Enter 发送..."` |
 | `systemPrompt` | `string` | 否 | 系统提示词，作为对话上下文的首条 system 消息 |
 
@@ -122,6 +123,8 @@ Block 保存的 JSON 数据结构如下：
       { "role": "assistant", "content": "你好！有什么可以帮助你的？", "timestamp": 1700000001000 }
     ],
     "connectionId": null,
+    "temperature": null,
+    "maxTokens": null,
     "systemPrompt": ""
   }
 }

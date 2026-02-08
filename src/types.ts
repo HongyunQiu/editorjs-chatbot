@@ -15,7 +15,22 @@ export interface ChatMessage {
 export interface ChatbotData {
   messages: ChatMessage[];
   connectionId?: number | null;
+  temperature?: number | null;
+  maxTokens?: number | null;
   systemPrompt?: string;
+}
+
+/**
+ * QNotes AI 模型连接（最小字段集）
+ */
+export interface AiConnectionInfo {
+  id: number;
+  name?: string;
+  provider?: string;
+  model_name?: string;
+  config?: any;
+  is_active?: boolean | number;
+  is_default?: boolean | number;
 }
 
 /**
@@ -44,6 +59,12 @@ export type AiChatFn = (
  */
 export interface ChatbotConfig extends ToolConfig {
   aiChat?: AiChatFn;
+  /**
+   * 列出可用的模型连接（用于在 UI 中选择模型）
+   * - 在 QNotes 中可注入为：() => fn.request('/ai/connections').then(r => r.connections)
+   * - 若不提供，则插件不显示“模型连接”选择
+   */
+  listConnections?: () => Promise<AiConnectionInfo[] | { connections?: AiConnectionInfo[] }>;
   placeholder?: string;
   systemPrompt?: string;
 }
@@ -67,6 +88,9 @@ export interface ChatbotCSS {
   header: string;
   headerTitle: string;
   headerToggle: string;
+  headerControls: string;
+  headerLabel: string;
+  headerControl: string;
   messageList: string;
   message: string;
   messageUser: string;

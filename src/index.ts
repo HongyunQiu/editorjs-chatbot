@@ -16,6 +16,7 @@ import type {
   ChatbotParams,
   ChatbotCSS,
   AiChatHandle,
+  AiConnectionInfo,
 } from './types';
 
 // 聊天气泡图标 (SVG)
@@ -61,6 +62,16 @@ export default class Chatbot implements BlockTool {
   private fullscreenToggleBtnEl: HTMLElement | null = null;
   private wrapperParentEl: HTMLElement | null = null;
 
+  // 头部控件（模型/温度/长度）
+  private connSelectEl: HTMLSelectElement | null = null;
+  private temperatureInputEl: HTMLInputElement | null = null;
+  private maxTokensKInputEl: HTMLInputElement | null = null;
+
+  private connections: AiConnectionInfo[] = [];
+  private isConnectionsLoading: boolean = false;
+  private defaultTemperatureHint: number | null = null;
+  private defaultMaxTokensHint: number | null = null;
+
   static get isReadOnlySupported(): boolean {
     return true;
   }
@@ -92,6 +103,9 @@ export default class Chatbot implements BlockTool {
       header: 'cdx-chatbot__header',
       headerTitle: 'cdx-chatbot__header-title',
       headerToggle: 'cdx-chatbot__header-toggle',
+      headerControls: 'cdx-chatbot__header-controls',
+      headerLabel: 'cdx-chatbot__header-label',
+      headerControl: 'cdx-chatbot__header-control',
       messageList: 'cdx-chatbot__messages',
       message: 'cdx-chatbot__msg',
       messageUser: 'cdx-chatbot__msg--user',
@@ -126,8 +140,85 @@ export default class Chatbot implements BlockTool {
         timestamp: m.timestamp || undefined,
       })) : [],
       connectionId: d.connectionId || null,
+      temperature: (typeof d.temperature === 'number' ? d.temperature : null),
+      maxTokens: (typeof d.maxTokens === 'number' ? d.maxTokens : null),
       systemPrompt: d.systemPrompt || this.config?.systemPrompt || '',
     };
+  }
+
+  private toFiniteNumber(v: any): number | null {
+    const n = v == null ? NaN : Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  private safeParseJson(raw: any): any | null {
+    if (raw == null) return null;
+    if (typeof raw === 'object') return raw;
+    try {
+      return JSON.parse(String(raw));
+    } catch {
+      return null;
+    }
+  }
+
+  private getConnectionParams(conn: AiConnectionInfo | null): any {
+    if (!conn) return {};
+    const cfg = this.safeParseJson((conn as any).config) || {};
+    const raw = cfg && typeof cfg.params === 'object' && cfg.params ? cfg.params : cfg;
+    if (!raw || typeof raw !== 'object') return {};
+    const out: any = { ...raw };
+    if (out.proxy) delete out.proxy;
+    return out;
+  }
+
+  private findDefaultConnection(): AiConnectionInfo | null {
+    const list = Array.isArray(this.connections) ? this.connections : [];
+    const def = list.find((c) => c && (c.is_default === 1 || c.is_default === true));
+    return def || null;
+  }
+
+  private getSelectedOrDefaultConnection(): AiConnectionInfo | null {
+    const list = Array.isArray(this.connections) ? this.connections : [];
+    if (this.data.connectionId != null) {
+      const found = list.find((c) => String(c && c.id) === String(this.data.connectionId));
+      if (found) return found;
+    }
+    return this.findDefaultConnection();
+  }
+
+  private updateHeaderDefaultHints(): void {
+    const conn = this.getSelectedOrDefaultConnection();
+    const params = this.getConnectionParams(conn);
+    const t = this.toFiniteNumber(params.temperature);
+    const mt =
+      this.toFiniteNumber(params.max_tokens) ??
+      this.toFiniteNumber(params.max_completion_tokens);
+
+    this.defaultTemperatureHint = t;
+    this.defaultMaxTokensHint = mt;
+
+    if (this.temperatureInputEl && (this.data.temperature == null || this.temperatureInputEl.value.trim() === '')) {
+      this.temperatureInputEl.placeholder = t != null ? String(t) : 'T';
+    }
+    if (this.maxTokensKInputEl && (this.data.maxTokens == null || this.maxTokensKInputEl.value.trim() === '')) {
+      if (mt != null && mt > 0) {
+        const k = Math.round((mt / 1000) * 100) / 100;
+        this.maxTokensKInputEl.placeholder = String(k);
+      } else {
+        this.maxTokensKInputEl.placeholder = 'K';
+      }
+    }
+
+    // 更新“默认”选项文案为默认连接名称（若可用）
+    const select = this.connSelectEl;
+    if (select && select.options && select.options.length) {
+      const opt0 = select.options[0];
+      if (opt0 && opt0.value === '') {
+        const def = this.findDefaultConnection();
+        const defName = def && def.name ? String(def.name) : '';
+        opt0.textContent = defName ? ('默认（' + defName + '）') : '默认';
+      }
+    }
   }
 
   /**
@@ -142,6 +233,10 @@ export default class Chatbot implements BlockTool {
     const titleEl = make('div', [this.css.headerTitle]) as HTMLElement;
     titleEl.innerHTML = AI_ICON + '<span>AI 对话</span>';
 
+    // 头部控件（紧凑显示）
+    const controls = make('div', [this.css.headerControls]) as HTMLElement;
+    this.renderHeaderControls(controls);
+
     const toggleBtn = make('button', [this.css.headerToggle]) as HTMLElement;
     toggleBtn.textContent = '折叠';
     toggleBtn.addEventListener('click', () => this.toggleCollapse());
@@ -152,6 +247,7 @@ export default class Chatbot implements BlockTool {
     this.fullscreenToggleBtnEl = fullscreenBtn;
 
     const headerButtons = make('div', [this.css.headerButtons]) as HTMLElement;
+    headerButtons.appendChild(controls);
     headerButtons.appendChild(toggleBtn);
     headerButtons.appendChild(fullscreenBtn);
 
@@ -205,6 +301,11 @@ export default class Chatbot implements BlockTool {
     // 滚动到底部
     this.scrollToBottom();
 
+    // 触发一次连接列表加载（若宿主提供）
+    this.ensureConnectionsLoaded();
+    // 在连接列表加载前也先给出当前占位（可能是空/本地默认）
+    this.updateHeaderDefaultHints();
+
     return this.wrapper;
   }
 
@@ -219,6 +320,8 @@ export default class Chatbot implements BlockTool {
         timestamp: m.timestamp,
       })),
       connectionId: this.data.connectionId,
+      temperature: this.data.temperature,
+      maxTokens: this.data.maxTokens,
       systemPrompt: this.data.systemPrompt,
     };
   }
@@ -287,6 +390,11 @@ export default class Chatbot implements BlockTool {
     }
 
     // 发起流式请求
+    const aiOptions: any = {};
+    if (this.data.connectionId != null) aiOptions.connection_id = this.data.connectionId;
+    if (typeof this.data.temperature === 'number') aiOptions.temperature = this.data.temperature;
+    if (typeof this.data.maxTokens === 'number') aiOptions.max_tokens = this.data.maxTokens;
+
     const handle = aiChat(
       messages,
       (chunk: string) => {
@@ -294,9 +402,7 @@ export default class Chatbot implements BlockTool {
         this.currentAssistantContent += chunk;
         this.renderAssistantContent();
       },
-      {
-        connection_id: this.data.connectionId,
-      }
+      aiOptions
     );
 
     this.currentHandle = handle;
@@ -446,6 +552,10 @@ export default class Chatbot implements BlockTool {
     if (this.inputEl) {
       this.inputEl.disabled = this.isStreaming;
     }
+    const disableControls = this.readOnly || this.isStreaming;
+    if (this.connSelectEl) this.connSelectEl.disabled = disableControls || this.isConnectionsLoading;
+    if (this.temperatureInputEl) this.temperatureInputEl.disabled = disableControls;
+    if (this.maxTokensKInputEl) this.maxTokensKInputEl.disabled = disableControls;
   }
 
   /**
@@ -466,6 +576,179 @@ export default class Chatbot implements BlockTool {
     if (btn) {
       btn.textContent = this.isCollapsed ? '展开' : '折叠';
     }
+  }
+
+  private async ensureConnectionsLoaded(): Promise<void> {
+    const listFn = this.config && this.config.listConnections;
+    if (typeof listFn !== 'function') return;
+    if (this.isConnectionsLoading) return;
+    if (this.connections && this.connections.length) return;
+
+    this.isConnectionsLoading = true;
+    this.refreshConnectionSelectOptions();
+    this.updateButtonState();
+    try {
+      const res = await listFn();
+      const list = Array.isArray(res) ? res : (res && Array.isArray((res as any).connections) ? (res as any).connections : []);
+      this.connections = (Array.isArray(list) ? list : []).filter((c) => c && typeof c.id === 'number');
+    } catch {
+      this.connections = [];
+    } finally {
+      this.isConnectionsLoading = false;
+      this.refreshConnectionSelectOptions();
+      this.updateHeaderDefaultHints();
+      this.updateButtonState();
+    }
+  }
+
+  private renderHeaderControls(container: HTMLElement): void {
+    container.innerHTML = '';
+
+    // 连接选择（若宿主提供 listConnections）
+    if (typeof (this.config && this.config.listConnections) === 'function') {
+      const label = document.createElement('span');
+      label.className = this.css.headerLabel;
+      label.textContent = '模型';
+      container.appendChild(label);
+
+      const select = document.createElement('select');
+      select.className = this.css.headerControl;
+      select.title = '模型连接（来自 QNotes AI 模型管理）';
+      this.connSelectEl = select;
+      this.refreshConnectionSelectOptions();
+      select.value = this.data.connectionId != null ? String(this.data.connectionId) : '';
+      select.addEventListener('change', () => {
+        const v = select.value;
+        const id = v ? parseInt(v, 10) : null;
+        this.data.connectionId = Number.isInteger(id) ? id : null;
+        this.updateHeaderDefaultHints();
+      });
+      container.appendChild(select);
+    } else {
+      this.connSelectEl = null;
+    }
+
+    // 温度
+    {
+      const label = document.createElement('span');
+      label.className = this.css.headerLabel;
+      label.textContent = '温度';
+      container.appendChild(label);
+
+      const input = document.createElement('input');
+      input.className = this.css.headerControl;
+      input.type = 'number';
+      input.step = '0.1';
+      input.min = '0';
+      input.max = '2';
+      input.placeholder = 'T';
+      input.title = '温度 temperature（留空=跟随连接默认/后端默认）';
+      input.value = (typeof this.data.temperature === 'number') ? String(this.data.temperature) : '';
+      input.addEventListener('input', () => {
+        const s = input.value.trim();
+        if (!s) {
+          this.data.temperature = null;
+          this.updateHeaderDefaultHints();
+          return;
+        }
+        const n = Number(s);
+        this.data.temperature = Number.isFinite(n) ? n : null;
+      });
+      this.temperatureInputEl = input;
+      container.appendChild(input);
+    }
+
+    // 长度（K tokens）
+    {
+      const label = document.createElement('span');
+      label.className = this.css.headerLabel;
+      label.textContent = '长度（K tokens）';
+      container.appendChild(label);
+
+      const input = document.createElement('input');
+      input.className = this.css.headerControl;
+      input.type = 'number';
+      input.step = '0.5';
+      input.min = '0.5';
+      input.placeholder = 'K';
+      input.title = '长度（K tokens）。例如 2 表示 2000 tokens。留空=跟随连接默认/后端默认';
+      input.value = (typeof this.data.maxTokens === 'number' && this.data.maxTokens > 0)
+        ? String(Math.round((this.data.maxTokens / 1000) * 100) / 100)
+        : '';
+      input.addEventListener('input', () => {
+        const s = input.value.trim();
+        if (!s) {
+          this.data.maxTokens = null;
+          this.updateHeaderDefaultHints();
+          return;
+        }
+        const k = Number(s);
+        if (!Number.isFinite(k) || k <= 0) {
+          this.data.maxTokens = null;
+          this.updateHeaderDefaultHints();
+          return;
+        }
+        this.data.maxTokens = Math.max(1, Math.round(k * 1000));
+      });
+      this.maxTokensKInputEl = input;
+      container.appendChild(input);
+    }
+
+    this.updateButtonState();
+    this.updateHeaderDefaultHints();
+  }
+
+  private refreshConnectionSelectOptions(): void {
+    const select = this.connSelectEl;
+    if (!select) return;
+    const prev = select.value;
+    select.innerHTML = '';
+
+    const optDefault = document.createElement('option');
+    optDefault.value = '';
+    const def = this.findDefaultConnection();
+    const defName = def && def.name ? String(def.name) : '';
+    optDefault.textContent = defName ? ('默认（' + defName + '）') : '默认';
+    select.appendChild(optDefault);
+
+    if (this.isConnectionsLoading) {
+      const optLoading = document.createElement('option');
+      optLoading.value = '__loading__';
+      optLoading.textContent = '加载中…';
+      select.appendChild(optLoading);
+      select.value = prev || '';
+      return;
+    }
+
+    const items = (this.connections || []).slice();
+    items.sort((a, b) => {
+      const ad = a && (a.is_default === 1 || a.is_default === true) ? 0 : 1;
+      const bd = b && (b.is_default === 1 || b.is_default === true) ? 0 : 1;
+      if (ad !== bd) return ad - bd;
+      const an = (a && a.name) ? String(a.name) : '';
+      const bn = (b && b.name) ? String(b.name) : '';
+      if (an && bn) return an.localeCompare(bn, 'zh-CN');
+      return (a.id || 0) - (b.id || 0);
+    });
+
+    items.forEach((c) => {
+      const active = !(c.is_active === 0 || c.is_active === false);
+      const opt = document.createElement('option');
+      opt.value = String(c.id);
+      const name = c.name ? String(c.name) : ('连接 ' + c.id);
+      // 头部空间有限：只显示名称，详细信息用 title
+      opt.textContent = name;
+      const provider = c.provider ? String(c.provider) : '';
+      const model = c.model_name ? String(c.model_name) : '';
+      const extra = [provider, model].filter(Boolean).join(' / ');
+      opt.title = extra ? (name + '（' + extra + '）') : name;
+      opt.disabled = !active;
+      select.appendChild(opt);
+    });
+
+    // 尽量恢复选择
+    select.value = prev || (this.data.connectionId != null ? String(this.data.connectionId) : '');
+    this.updateHeaderDefaultHints();
   }
 
   // ========== 全屏逻辑 ==========
