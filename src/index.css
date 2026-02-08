@@ -1,25 +1,73 @@
 /* ============================================
    editorjs-chatbot 样式
+   深浅色主题自动适配（跟随系统 prefers-color-scheme）
    ============================================ */
 
-/* CSS 变量 - 方便主题定制 */
-:root {
-  --chatbot-primary: #4f6ef7;
+/* ---- CSS 变量（浅色默认）----
+   优先映射 QNotes 全局变量，带 fallback 确保脱离宿主也可用 */
+.cdx-chatbot {
+  --chatbot-primary: var(--primary, #4f6ef7);
   --chatbot-primary-hover: #3b5de7;
-  --chatbot-bg: #ffffff;
-  --chatbot-border: #e2e8f0;
-  --chatbot-user-bg: #4f6ef7;
+  --chatbot-bg: var(--surface, #ffffff);
+  --chatbot-border: var(--border, #e2e8f0);
+  --chatbot-user-bg: var(--primary, #4f6ef7);
   --chatbot-user-text: #ffffff;
-  --chatbot-assistant-bg: #f1f5f9;
-  --chatbot-assistant-text: #1e293b;
-  --chatbot-input-bg: #f8fafc;
-  --chatbot-input-border: #cbd5e1;
-  --chatbot-header-bg: #f8fafc;
+  --chatbot-assistant-bg: var(--surface-muted, #f1f5f9);
+  --chatbot-assistant-text: var(--text, #1e293b);
+  --chatbot-assistant-avatar-bg: #e2e8f0;
+  --chatbot-assistant-avatar-color: #475569;
+  --chatbot-input-bg: var(--surface-muted, #f8fafc);
+  --chatbot-input-border: var(--border, #cbd5e1);
+  --chatbot-header-bg: var(--surface-muted, #f8fafc);
   --chatbot-code-bg: #1e1e2e;
   --chatbot-code-header-bg: #2d2d3f;
-  --chatbot-danger: #ef4444;
+  --chatbot-code-text: #94a3b8;
+  --chatbot-danger: var(--danger, #ef4444);
+  --chatbot-danger-hover: #dc2626;
   --chatbot-radius: 12px;
   --chatbot-msg-radius: 16px;
+  --chatbot-muted: var(--text-muted, #64748b);
+  --chatbot-placeholder: var(--text-muted, #94a3b8);
+  --chatbot-scrollbar: #cbd5e1;
+  --chatbot-scrollbar-hover: #94a3b8;
+  --chatbot-inline-code-bg: rgba(0, 0, 0, 0.06);
+  --chatbot-inline-code-text: #c7254e;
+  --chatbot-blockquote-bg: rgba(0, 0, 0, 0.02);
+  --chatbot-blockquote-text: var(--text-muted, #64748b);
+  --chatbot-loading-dot: #94a3b8;
+  --chatbot-focus-shadow: rgba(79, 110, 247, 0.15);
+}
+
+/* ---- 深色模式覆写 ---- */
+@media (prefers-color-scheme: dark) {
+  .cdx-chatbot {
+    --chatbot-primary-hover: #5a7ef9;
+    --chatbot-bg: var(--surface, #1b1c1f);
+    --chatbot-border: var(--border, #2a2b2f);
+    --chatbot-user-bg: var(--primary, #4f6ef7);
+    --chatbot-user-text: #ffffff;
+    --chatbot-assistant-bg: var(--control-bg, #222327);
+    --chatbot-assistant-text: var(--text, #e9e9eb);
+    --chatbot-assistant-avatar-bg: #2b2c31;
+    --chatbot-assistant-avatar-color: #a1a1aa;
+    --chatbot-input-bg: var(--surface-muted, #121214);
+    --chatbot-input-border: var(--border, #2a2b2f);
+    --chatbot-header-bg: var(--surface-muted, #121214);
+    --chatbot-code-bg: #111113;
+    --chatbot-code-header-bg: #1a1a1e;
+    --chatbot-code-text: #7a7a85;
+    --chatbot-muted: var(--text-muted, #a1a1aa);
+    --chatbot-placeholder: var(--text-muted, #6b7280);
+    --chatbot-scrollbar: #333338;
+    --chatbot-scrollbar-hover: #4a4a52;
+    --chatbot-inline-code-bg: rgba(255, 255, 255, 0.08);
+    --chatbot-inline-code-text: #e06c75;
+    --chatbot-blockquote-bg: rgba(255, 255, 255, 0.03);
+    --chatbot-blockquote-text: var(--text-muted, #a1a1aa);
+    --chatbot-loading-dot: #6b7280;
+    --chatbot-focus-shadow: rgba(79, 110, 247, 0.25);
+    --chatbot-danger-hover: #f87171;
+  }
 }
 
 /* ---- 主容器 ---- */
@@ -28,6 +76,7 @@
   border-radius: var(--chatbot-radius);
   overflow: hidden;
   background: var(--chatbot-bg);
+  color: var(--chatbot-assistant-text);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 14px;
   line-height: 1.6;
@@ -59,18 +108,27 @@
   color: var(--chatbot-primary);
 }
 
-.cdx-chatbot__header-toggle {
+/* 头部按钮组 */
+.cdx-chatbot__header-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cdx-chatbot__header-toggle,
+.cdx-chatbot__header-fullscreen {
   background: none;
   border: 1px solid var(--chatbot-border);
   border-radius: 6px;
   padding: 4px 12px;
   font-size: 12px;
-  color: #64748b;
+  color: var(--chatbot-muted);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
-.cdx-chatbot__header-toggle:hover {
+.cdx-chatbot__header-toggle:hover,
+.cdx-chatbot__header-fullscreen:hover {
   background: var(--chatbot-border);
   color: var(--chatbot-assistant-text);
 }
@@ -79,6 +137,52 @@
 .cdx-chatbot--collapsed .cdx-chatbot__messages,
 .cdx-chatbot--collapsed .cdx-chatbot__input-area {
   display: none;
+}
+
+/* ---- 全屏覆盖层 ---- */
+.cdx-chatbot__fullscreen-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  background: var(--chatbot-bg, #f9fafb);
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+@media (prefers-color-scheme: dark) {
+  .cdx-chatbot__fullscreen-overlay {
+    background: var(--chatbot-bg, #1b1c1f);
+  }
+}
+
+/* ---- 全屏模式下的聊天容器 ---- */
+.cdx-chatbot--fullscreen {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  border: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.cdx-chatbot--fullscreen .cdx-chatbot__messages {
+  flex: 1;
+  max-height: none;
+  min-height: 0;
+}
+
+.cdx-chatbot--fullscreen .cdx-chatbot__header-fullscreen {
+  background: rgba(15, 23, 42, 0.9);
+  color: #ffffff;
+  border-color: transparent;
+}
+
+.cdx-chatbot--fullscreen .cdx-chatbot__header-fullscreen:hover {
+  background: rgba(15, 23, 42, 1);
+  color: #ffffff;
 }
 
 /* ---- 消息列表 ---- */
@@ -99,12 +203,12 @@
 }
 
 .cdx-chatbot__messages::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--chatbot-scrollbar);
   border-radius: 3px;
 }
 
 .cdx-chatbot__messages::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--chatbot-scrollbar-hover);
 }
 
 /* ---- 消息气泡通用 ---- */
@@ -163,8 +267,8 @@
 
 /* ---- AI 消息 ---- */
 .cdx-chatbot__msg--assistant .cdx-chatbot__msg-avatar {
-  background: #e2e8f0;
-  color: #475569;
+  background: var(--chatbot-assistant-avatar-bg);
+  color: var(--chatbot-assistant-avatar-color);
 }
 
 .cdx-chatbot__msg--assistant .cdx-chatbot__msg-content {
@@ -196,8 +300,8 @@
   border-left: 3px solid var(--chatbot-primary);
   margin: 8px 0;
   padding: 4px 12px;
-  color: #64748b;
-  background: rgba(0, 0, 0, 0.02);
+  color: var(--chatbot-blockquote-text);
+  background: var(--chatbot-blockquote-bg);
   border-radius: 0 6px 6px 0;
 }
 
@@ -234,12 +338,12 @@
 
 /* 行内代码 */
 .cdx-chatbot__inline-code {
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--chatbot-inline-code-bg);
   padding: 2px 6px;
   border-radius: 4px;
   font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
   font-size: 0.9em;
-  color: #c7254e;
+  color: var(--chatbot-inline-code-text);
 }
 
 /* ---- 代码块 ---- */
@@ -256,7 +360,7 @@
   justify-content: space-between;
   padding: 6px 12px;
   background: var(--chatbot-code-header-bg);
-  color: #94a3b8;
+  color: var(--chatbot-code-text);
   font-size: 12px;
 }
 
@@ -269,7 +373,7 @@
 .cdx-chatbot__code-copy {
   background: none;
   border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #94a3b8;
+  color: var(--chatbot-code-text);
   padding: 2px 10px;
   border-radius: 4px;
   font-size: 11px;
@@ -325,18 +429,19 @@
   outline: none;
   background: var(--chatbot-bg);
   color: var(--chatbot-assistant-text);
+  caret-color: var(--chatbot-assistant-text);
   transition: border-color 0.15s ease;
   max-height: 120px;
   overflow-y: auto;
 }
 
 .cdx-chatbot__input::placeholder {
-  color: #94a3b8;
+  color: var(--chatbot-placeholder);
 }
 
 .cdx-chatbot__input:focus {
   border-color: var(--chatbot-primary);
-  box-shadow: 0 0 0 2px rgba(79, 110, 247, 0.15);
+  box-shadow: 0 0 0 2px var(--chatbot-focus-shadow);
 }
 
 .cdx-chatbot__input:disabled {
@@ -386,7 +491,7 @@
 }
 
 .cdx-chatbot__stop-btn:hover {
-  background: #dc2626;
+  background: var(--chatbot-danger-hover);
 }
 
 .cdx-chatbot__stop-btn svg {
@@ -407,7 +512,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #94a3b8;
+  background: var(--chatbot-loading-dot);
   animation: cdx-chatbot-bounce 1.2s infinite ease-in-out;
 }
 
@@ -441,10 +546,21 @@
   overflow-y: hidden;
 }
 
+.cdx-chatbot__msg-content .katex {
+  color: var(--chatbot-assistant-text);
+}
+
 .cdx-chatbot__katex-error {
   color: var(--chatbot-danger);
   font-family: monospace;
   font-size: 13px;
+}
+
+/* ---- highlight.js 代码高亮 scoped 覆盖 ----
+   代码块始终保持暗色主题，但确保与容器变量一致 */
+.cdx-chatbot__code-block .hljs {
+  background: transparent;
+  color: #abb2bf;
 }
 
 /* ---- 响应式 ---- */

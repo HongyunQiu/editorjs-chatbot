@@ -82,4 +82,8 @@ export interface ChatbotCSS {
   collapsed: string;
   codeBlock: string;
   codeCopyBtn: string;
+  headerButtons: string;
+  fullscreenBtn: string;
+  fullscreenOverlay: string;
+  fullscreen: string;
 }

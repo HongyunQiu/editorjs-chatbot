@@ -55,6 +55,12 @@ export default class Chatbot implements BlockTool {
   private currentAssistantEl: HTMLElement | null = null;
   private isCollapsed: boolean = false;
 
+  // 全屏状态
+  private isFullscreen: boolean = false;
+  private fullscreenOverlayEl: HTMLElement | null = null;
+  private fullscreenToggleBtnEl: HTMLElement | null = null;
+  private wrapperParentEl: HTMLElement | null = null;
+
   static get isReadOnlySupported(): boolean {
     return true;
   }
@@ -101,6 +107,10 @@ export default class Chatbot implements BlockTool {
       collapsed: 'cdx-chatbot--collapsed',
       codeBlock: 'cdx-chatbot__code-block',
       codeCopyBtn: 'cdx-chatbot__code-copy',
+      headerButtons: 'cdx-chatbot__header-buttons',
+      fullscreenBtn: 'cdx-chatbot__header-fullscreen',
+      fullscreenOverlay: 'cdx-chatbot__fullscreen-overlay',
+      fullscreen: 'cdx-chatbot--fullscreen',
     };
   }
 
@@ -136,8 +146,17 @@ export default class Chatbot implements BlockTool {
     toggleBtn.textContent = '折叠';
     toggleBtn.addEventListener('click', () => this.toggleCollapse());
 
+    const fullscreenBtn = make('button', [this.css.fullscreenBtn]) as HTMLElement;
+    fullscreenBtn.textContent = '全屏';
+    fullscreenBtn.addEventListener('click', () => this.toggleFullscreen());
+    this.fullscreenToggleBtnEl = fullscreenBtn;
+
+    const headerButtons = make('div', [this.css.headerButtons]) as HTMLElement;
+    headerButtons.appendChild(toggleBtn);
+    headerButtons.appendChild(fullscreenBtn);
+
     header.appendChild(titleEl);
-    header.appendChild(toggleBtn);
+    header.appendChild(headerButtons);
     this.wrapper.appendChild(header);
 
     // ---- 消息列表 ----
@@ -447,5 +466,86 @@ export default class Chatbot implements BlockTool {
     if (btn) {
       btn.textContent = this.isCollapsed ? '展开' : '折叠';
     }
+  }
+
+  // ========== 全屏逻辑 ==========
+
+  /**
+   * 切换全屏状态
+   */
+  private toggleFullscreen(): void {
+    if (this.isFullscreen) {
+      this.exitFullscreen();
+    } else {
+      this.enterFullscreen();
+    }
+  }
+
+  /**
+   * 进入全屏（页面内全屏，非浏览器原生 F11）
+   */
+  private enterFullscreen(): void {
+    if (this.isFullscreen) return;
+    if (typeof document === 'undefined') return;
+    if (!this.wrapper) return;
+
+    // 如果处于折叠状态，先展开
+    if (this.isCollapsed) {
+      this.toggleCollapse();
+    }
+
+    // 记录原始父节点，方便退出全屏时还原
+    if (!this.wrapperParentEl) {
+      this.wrapperParentEl = this.wrapper.parentElement;
+    }
+
+    // 创建全屏覆盖层
+    const overlay = document.createElement('div');
+    overlay.className = this.css.fullscreenOverlay;
+
+    // 将整个聊天区域移动到覆盖层下
+    overlay.appendChild(this.wrapper);
+    document.body.appendChild(overlay);
+
+    this.wrapper.classList.add(this.css.fullscreen);
+
+    if (this.fullscreenToggleBtnEl) {
+      this.fullscreenToggleBtnEl.textContent = '退出全屏';
+    }
+
+    this.fullscreenOverlayEl = overlay;
+    this.isFullscreen = true;
+
+    // 全屏后滚动到底部
+    this.scrollToBottom();
+  }
+
+  /**
+   * 退出全屏
+   */
+  private exitFullscreen(): void {
+    if (!this.isFullscreen) return;
+    if (typeof document === 'undefined') return;
+
+    // 将聊天区域移回原始块内
+    if (this.wrapper && this.wrapperParentEl) {
+      this.wrapperParentEl.appendChild(this.wrapper);
+      this.wrapper.classList.remove(this.css.fullscreen);
+    }
+
+    // 移除覆盖层
+    if (this.fullscreenOverlayEl && this.fullscreenOverlayEl.parentNode) {
+      this.fullscreenOverlayEl.parentNode.removeChild(this.fullscreenOverlayEl);
+    }
+    this.fullscreenOverlayEl = null;
+
+    if (this.fullscreenToggleBtnEl) {
+      this.fullscreenToggleBtnEl.textContent = '全屏';
+    }
+
+    this.isFullscreen = false;
+
+    // 退出全屏后滚动到底部
+    this.scrollToBottom();
   }
 }
