@@ -46,6 +46,7 @@ export default class Chatbot implements BlockTool {
   private wrapper: HTMLElement | null = null;
   private messageList: HTMLElement | null = null;
   private inputEl: HTMLTextAreaElement | null = null;
+  private referenceBtn: HTMLButtonElement | null = null;
   private sendBtn: HTMLElement | null = null;
   private stopBtn: HTMLElement | null = null;
 
@@ -114,6 +115,8 @@ export default class Chatbot implements BlockTool {
       messageAvatar: 'cdx-chatbot__msg-avatar',
       inputArea: 'cdx-chatbot__input-area',
       input: 'cdx-chatbot__input',
+      referenceBtn: 'cdx-chatbot__reference-btn',
+      referenceBtnActive: 'cdx-chatbot__reference-btn--active',
       sendBtn: 'cdx-chatbot__send-btn',
       stopBtn: 'cdx-chatbot__stop-btn',
       loading: 'cdx-chatbot__loading',
@@ -126,6 +129,26 @@ export default class Chatbot implements BlockTool {
       fullscreenOverlay: 'cdx-chatbot__fullscreen-overlay',
       fullscreen: 'cdx-chatbot--fullscreen',
     };
+  }
+
+  private async getCurrentNoteContextMessage(): Promise<string> {
+    const getter = this.config && this.config.getCurrentNoteContext;
+    if (typeof getter !== 'function') return '';
+    try {
+      const raw = await getter();
+      const text = typeof raw === 'string' ? raw.trim() : '';
+      if (!text) return '';
+      return [
+        '以下是当前笔记内容，请将其作为本次对话的背景上下文。',
+        '后续回答可以引用这些内容；若与用户当前消息冲突，以用户当前消息为准。',
+        '',
+        '[当前笔记内容开始]',
+        text,
+        '[当前笔记内容结束]',
+      ].join('\n');
+    } catch {
+      return '';
+    }
   }
 
   /**
@@ -143,6 +166,8 @@ export default class Chatbot implements BlockTool {
       temperature: (typeof d.temperature === 'number' ? d.temperature : null),
       maxTokens: (typeof d.maxTokens === 'number' ? d.maxTokens : null),
       systemPrompt: d.systemPrompt || this.config?.systemPrompt || '',
+      quoteCurrentNote: !!d.quoteCurrentNote,
+      hasInjectedNoteContext: !!d.hasInjectedNoteContext,
     };
   }
 
@@ -276,15 +301,24 @@ export default class Chatbot implements BlockTool {
       this.inputEl.addEventListener('keydown', (e: KeyboardEvent) => {
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
-          this.sendMessage();
+          void this.sendMessage();
         }
       });
       this.inputEl.addEventListener('input', () => this.autoResizeInput());
 
+      this.referenceBtn = make('button', [this.css.referenceBtn]) as HTMLButtonElement;
+      this.referenceBtn.type = 'button';
+      this.referenceBtn.addEventListener('click', () => {
+        if (this.data.hasInjectedNoteContext) return;
+        this.data.quoteCurrentNote = !this.data.quoteCurrentNote;
+        this.refreshReferenceButtonState();
+      });
+      this.refreshReferenceButtonState();
+
       this.sendBtn = make('button', [this.css.sendBtn]) as HTMLElement;
       this.sendBtn.innerHTML = SEND_ICON;
       this.sendBtn.title = '发送 (Enter)';
-      this.sendBtn.addEventListener('click', () => this.sendMessage());
+      this.sendBtn.addEventListener('click', () => void this.sendMessage());
 
       this.stopBtn = make('button', [this.css.stopBtn]) as HTMLElement;
       this.stopBtn.innerHTML = STOP_ICON;
@@ -292,6 +326,7 @@ export default class Chatbot implements BlockTool {
       this.stopBtn.style.display = 'none';
       this.stopBtn.addEventListener('click', () => this.stopStreaming());
 
+      if (this.referenceBtn) inputArea.appendChild(this.referenceBtn);
       inputArea.appendChild(this.inputEl);
       inputArea.appendChild(this.sendBtn);
       inputArea.appendChild(this.stopBtn);
@@ -323,6 +358,8 @@ export default class Chatbot implements BlockTool {
       temperature: this.data.temperature,
       maxTokens: this.data.maxTokens,
       systemPrompt: this.data.systemPrompt,
+      quoteCurrentNote: this.data.quoteCurrentNote,
+      hasInjectedNoteContext: this.data.hasInjectedNoteContext,
     };
   }
 
@@ -338,7 +375,7 @@ export default class Chatbot implements BlockTool {
   /**
    * 发送消息
    */
-  private sendMessage(): void {
+  private async sendMessage(): Promise<void> {
     if (this.isStreaming) return;
     if (!this.inputEl) return;
 
@@ -350,6 +387,20 @@ export default class Chatbot implements BlockTool {
     this.autoResizeInput();
 
     // 添加用户消息
+    if (this.data.quoteCurrentNote && !this.data.hasInjectedNoteContext) {
+      const noteContext = await this.getCurrentNoteContextMessage();
+      if (noteContext) {
+        this.data.messages.push({
+          role: 'system',
+          content: noteContext,
+          timestamp: Date.now(),
+        });
+        this.data.hasInjectedNoteContext = true;
+        this.data.quoteCurrentNote = false;
+        this.refreshReferenceButtonState();
+      }
+    }
+
     const userMsg: ChatMessage = {
       role: 'user',
       content: text,
@@ -457,6 +508,18 @@ export default class Chatbot implements BlockTool {
   /**
    * 追加消息气泡到列表
    */
+  private refreshReferenceButtonState(): void {
+    if (!this.referenceBtn) return;
+    const isInjected = !!this.data.hasInjectedNoteContext;
+    const isActive = !isInjected && !!this.data.quoteCurrentNote;
+    this.referenceBtn.classList.toggle(this.css.referenceBtnActive, isActive || isInjected);
+    this.referenceBtn.textContent = isInjected ? '已引用笔记' : (isActive ? '取消引用' : '引用笔记');
+    this.referenceBtn.title = isInjected
+      ? '当前笔记内容已在首轮对话中注入，不会重复添加'
+      : (isActive ? '发送首条消息时会附带当前笔记内容' : '将当前笔记内容作为首轮对话上下文');
+    this.referenceBtn.disabled = this.readOnly || this.isStreaming || isInjected;
+  }
+
   private appendMessageBubble(role: 'user' | 'assistant', content: string): HTMLElement {
     const msgEl = make('div', [
       this.css.message,
@@ -552,6 +615,7 @@ export default class Chatbot implements BlockTool {
     if (this.inputEl) {
       this.inputEl.disabled = this.isStreaming;
     }
+    this.refreshReferenceButtonState();
     const disableControls = this.readOnly || this.isStreaming;
     if (this.connSelectEl) this.connSelectEl.disabled = disableControls || this.isConnectionsLoading;
     if (this.temperatureInputEl) this.temperatureInputEl.disabled = disableControls;

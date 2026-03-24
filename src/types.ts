@@ -18,6 +18,8 @@ export interface ChatbotData {
   temperature?: number | null;
   maxTokens?: number | null;
   systemPrompt?: string;
+  quoteCurrentNote?: boolean;
+  hasInjectedNoteContext?: boolean;
 }
 
 /**
@@ -65,6 +67,7 @@ export interface ChatbotConfig extends ToolConfig {
    * - 若不提供，则插件不显示“模型连接”选择
    */
   listConnections?: () => Promise<AiConnectionInfo[] | { connections?: AiConnectionInfo[] }>;
+  getCurrentNoteContext?: () => string | Promise<string>;
   placeholder?: string;
   systemPrompt?: string;
 }
@@ -99,6 +102,8 @@ export interface ChatbotCSS {
   messageAvatar: string;
   inputArea: string;
   input: string;
+  referenceBtn: string;
+  referenceBtnActive: string;
   sendBtn: string;
   stopBtn: string;
   loading: string;

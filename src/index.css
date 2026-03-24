@@ -532,6 +532,36 @@
   cursor: not-allowed;
 }
 
+.cdx-chatbot__reference-btn {
+  flex-shrink: 0;
+  min-width: 84px;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--chatbot-input-border);
+  border-radius: 10px;
+  background: var(--chatbot-bg);
+  color: var(--chatbot-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cdx-chatbot__reference-btn:hover:not(:disabled) {
+  border-color: var(--chatbot-primary);
+  color: var(--chatbot-primary);
+}
+
+.cdx-chatbot__reference-btn--active {
+  border-color: var(--chatbot-primary);
+  background: color-mix(in srgb, var(--chatbot-primary) 12%, var(--chatbot-bg));
+  color: var(--chatbot-primary);
+}
+
+.cdx-chatbot__reference-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
 /* 发送按钮 */
 .cdx-chatbot__send-btn {
   flex-shrink: 0;
