@@ -68,26 +68,32 @@ hljs.registerLanguage('lua', lua);
  * 处理 LaTeX 公式：支持 $...$ (行内) 和 $$...$$ (块级)
  * 在 marked 解析之前预处理
  */
+function renderKatexFormula(formula: string, displayMode: boolean): string {
+  try {
+    return katex.renderToString(formula.trim(), { displayMode, throwOnError: false });
+  } catch {
+    return '<span class="cdx-chatbot__katex-error">' + escapeHtml(formula) + '</span>';
+  }
+}
+
 function renderLatex(text: string): string {
-  // 块级公式 $$...$$
-  text = text.replace(/\$\$([\s\S]+?)\$\$/g, (_match, formula) => {
-    try {
-      return katex.renderToString(formula.trim(), { displayMode: true, throwOnError: false });
-    } catch {
-      return '<span class="cdx-chatbot__katex-error">' + escapeHtml(formula) + '</span>';
-    }
-  });
+  const replacements: Array<{ pattern: RegExp; displayMode: boolean }> = [
+    // 块级公式 $$...$$
+    { pattern: /\$\$([\s\S]+?)\$\$/g, displayMode: true },
+    // 块级公式 \[...\]
+    { pattern: /\\\[([\s\S]+?)\\\]/g, displayMode: true },
+    // 行内公式 \(...\)
+    { pattern: /\\\(([\s\S]+?)\\\)/g, displayMode: false },
+    // 行内公式 $...$（尽量避免误伤货币金额）
+    { pattern: /(?<!\$)\$(?![\s$])([\s\S]*?[^\s$])\$(?!\$)/g, displayMode: false },
+  ];
 
-  // 行内公式 $...$（避免匹配类似 $10 这样的金额）
-  text = text.replace(/(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)/g, (_match, formula) => {
-    try {
-      return katex.renderToString(formula.trim(), { displayMode: false, throwOnError: false });
-    } catch {
-      return '<span class="cdx-chatbot__katex-error">' + escapeHtml(formula) + '</span>';
-    }
-  });
+  let rendered = text;
+  for (const { pattern, displayMode } of replacements) {
+    rendered = rendered.replace(pattern, (_match, formula) => renderKatexFormula(formula, displayMode));
+  }
 
-  return text;
+  return rendered;
 }
 
 function escapeHtml(str: string): string {
